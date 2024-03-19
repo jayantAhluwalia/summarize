@@ -6,23 +6,17 @@ import (
 	"io"
 	"mime/multipart"
 
-	// "io/ioutil"
 	"log"
 	"net/http"
-
-	// "github.com/disintegration/imaging"
-	// "github.com/google/uuid"
 	"github.com/gorilla/mux"
-	// "github.com/otiai10/gosseract/v2"
 )
 
 func main() {
 	router := mux.NewRouter()
 
-	// Register the route with the correct HTTP method (POST)
 	router.HandleFunc("/api/v1/page", uploadImage).Methods("POST")
 
-	log.Println("Server listening on port 8000") // Informational message on startup
+	log.Println("Server listening on port 8000") 
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
@@ -40,11 +34,6 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to upload image", http.StatusBadRequest)
 		return
 	}
-
-	// filename := fmt.Sprintf("%s.png", uuid.New().String()) // Example using uuid
-
-  // Create a destination path
-  // destinationPath := fmt.Sprintf("./uploads/%s", filename)
 
 	text, err := performOCR(file)
 
@@ -66,9 +55,7 @@ func performOCR(file multipart.File) (string, error) {
 
 	writer := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(writer)
-	defer multipartWriter.Close()
 
-	// Write additional form fields if needed (e.g., language)
 	if err := multipartWriter.WriteField("language", "eng"); err != nil {
 			return "", err
 	}
@@ -83,7 +70,6 @@ func performOCR(file multipart.File) (string, error) {
 		return "", err
 	}
 
-	// Write image data directly
 	part, err := multipartWriter.CreateFormFile("filetype", "/pnp/image.png")
 	if err != nil {
 			return "", err
@@ -92,19 +78,17 @@ func performOCR(file multipart.File) (string, error) {
 	if err != nil {
 			return "", err
 	}
+	_ = multipartWriter.Close()
 
 	contentType := multipartWriter.FormDataContentType()
 
-	log.Print(contentType)
-	// Create HTTP request
 	req, err := http.NewRequest(method, url, writer)
 	if err != nil {
 			return "", err
 	}
-	req.Header.Set("apikey", "helloworld") // Replace with your actual API key
+	req.Header.Set("apikey", "helloworld")
 	req.Header.Set("Content-Type", contentType)
 
-	// Execute request and process response
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -117,6 +101,5 @@ func performOCR(file multipart.File) (string, error) {
 			return "", err
 	}
 
-	// Parse response based on OCR.space API format (handle potential errors)
 	return string(body), nil
 }
