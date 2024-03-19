@@ -2,14 +2,55 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 
 	"log"
 	"net/http"
+
 	"github.com/gorilla/mux"
 )
+
+type OCRResponse struct {
+  OCRExitCode                int                 `json:"OCRExitCode"`
+  IsErroredOnProcessing     bool                   `json:"IsErroredOnProcessing"`
+  ErrorMessage              string                 `json:"ErrorMessage"`
+  ErrorDetails              string                 `json:"ErrorDetails"`
+  SearchablePDFURL          string                 `json:"SearchablePDFURL"`
+  ProcessingTimeInMilliseconds string                 `json:"ProcessingTimeInMilliseconds"`
+  ParsedResults             []ParsedResult         `json:"ParsedResults"`
+}
+
+type ParsedResult struct {
+  FileParseExitCode        int                 `json:"FileParseExitCode"`
+  ParsedText               string                 `json:"ParsedText"`
+  ErrorMessage              string                 `json:"ErrorMessage"`
+  ErrorDetails              string                 `json:"ErrorDetails"`
+  TextOverlay               *TextOverlay           `json:"TextOverlay,omitempty"`
+}
+
+type TextOverlay struct {
+  HasOverlay               bool                   `json:"HasOverlay"`
+  Message                  string                 `json:"Message"`
+  Lines                    []Line                 `json:"Lines"`
+}
+
+type Line struct {
+  Words                     []Word                 `json:"Words"`
+  MaxHeight                 int                    `json:"MaxHeight"`
+  MinTop                   int                    `json:"MinTop"`
+}
+
+type Word struct {
+  WordText                 string                 `json:"WordText"`
+  Left                      int                    `json:"Left"`
+  Top                       int                    `json:"Top"`
+  Height                    int                    `json:"Height"`
+  Width                     int                    `json:"Width"`
+}
 
 func main() {
 	router := mux.NewRouter()
@@ -101,5 +142,19 @@ func performOCR(file multipart.File) (string, error) {
 			return "", err
 	}
 
-	return string(body), nil
+	var response OCRResponse
+
+	err = json.Unmarshal(body, &response)
+
+	if err != nil {
+    return "", errors.New("Failed to parse OCR response")
+  }
+
+	if response.IsErroredOnProcessing == true {
+		return response.ErrorMessage, nil
+	}
+
+	results := response.ParsedResults
+
+	return string(results[0].ParsedText), nil
 }
