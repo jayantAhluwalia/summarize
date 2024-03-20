@@ -1,9 +1,12 @@
 package main
 
 import (
+	// "bytes"
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 
 	"log"
 	"net/http"
@@ -130,16 +133,26 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		userId, _ = ai.SaveUser(userName)
 	}
 
+	imageBytes, _ := io.ReadAll(image)
+
 	log.Println("user id:", userId)
 
-	// imageId, _ := ai.SaveImage(userId, image)
-	// log.Println(imageId)
+	imageId, err := ai.SaveImage(userId, bytes.NewReader(imageBytes))
+	if err != nil {
+		log.Println("error saving image: ", err)
+		return
+	}
+	log.Println(imageId)
 
-	texts, err := ai.ExtractText(image)
+	texts, err := ai.ExtractText(bytes.NewReader(imageBytes))
 	summaries := make([]string, len(texts))
 
 	for i, text := range texts {
-		// ai.SaveText(userId, imageId, text)
+		if err := ai.SaveText(userId, text); err != nil {
+			log.Println("error saving ocr text: ", err)
+			return
+		}
+
 		if summary, e := ai.Summarize(text); e == nil {
 			summaries[i] = summary
 			// ai.SaveSummary(userId, imageId, summary)

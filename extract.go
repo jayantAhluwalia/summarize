@@ -56,7 +56,7 @@ func (space *OcrSpace) ExtractText(image io.Reader) (texts []string, err error) 
 		return texts, err
 	}
 
-	req.Header.Set("apikey", "helloworld")
+	req.Header.Set("apikey", "K85721292588957")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := space.Client.Do(req)
