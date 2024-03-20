@@ -57,23 +57,23 @@ type AdvertalystAi struct {
 }
 
 func main() {
+	db, err := sql.Open("sqlite3", "ocr.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	ai := AdvertalystAi{
 		TextExtractor: &OcrSpace{
 			url:    "https://api.ocr.space/parse/image",
 			Client: http.Client{},
 		},
 		Summarizer: &FaltuSummarizer{},
-		Db: &Sqlite{},
+		Db: &Sqlite{db},
 	}
 
 	router := mux.NewRouter()
 
-	db, err := sql.Open("sqlite3", "ocr.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer db.Close()
 	createTables(db)
 
 	router.HandleFunc("/api/v1/page", ai.uploadImage).Methods(http.MethodPost)
@@ -86,8 +86,7 @@ func createTables(db *sql.DB) {
 	userTable := `
 		CREATE TABLE IF NOT EXISTS user (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT NOT NULL UNIQUE,
-			name TEXT NOT NULL
+			username TEXT NOT NULL UNIQUE
 		)
 	`
 	summaryTable := `
@@ -95,7 +94,7 @@ func createTables(db *sql.DB) {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
 			image BLOB NOT NULL,
-			ocr_parsed_text TEXT NOT NULL,
+			ocr_parsed_text TEXT,
 			summary TEXT,
 			FOREIGN KEY (user_id) REFERENCES user(id)
 		)
@@ -111,7 +110,7 @@ func createTables(db *sql.DB) {
 }
 
 func getUserIdFromRequest(r *http.Request) string {
-	return ""
+	return r.FormValue("userName")
 }
 
 func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
@@ -123,20 +122,27 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer image.Close()
+	userName := getUserIdFromRequest(r)
 
-	userId := getUserIdFromRequest(r)
-	imageId, _ := ai.SaveImage(userId, image)
+	
+	userId, found := ai.GetUserId(userName)
+	if !found {
+		userId, _ = ai.SaveUser(userName)
+	}
 
-	log.Println(imageId)
+	log.Println("user id:", userId)
+
+	// imageId, _ := ai.SaveImage(userId, image)
+	// log.Println(imageId)
 
 	texts, err := ai.ExtractText(image)
 	summaries := make([]string, len(texts))
 
 	for i, text := range texts {
-		ai.SaveText(userId, imageId, text)
+		// ai.SaveText(userId, imageId, text)
 		if summary, e := ai.Summarize(text); e == nil {
 			summaries[i] = summary
-			ai.SaveSummary(userId, imageId, summary)
+			// ai.SaveSummary(userId, imageId, summary)
 		} else {
 			err = errors.Join(err, e)
 		}
