@@ -94,7 +94,7 @@ func createTables(db *sql.DB) {
 		CREATE TABLE IF NOT EXISTS summary (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
-			image BLOB NOT NULL,
+			image_path TEXT NOT NULL,
 			ocr_parsed_text TEXT,
 			summary TEXT,
 			FOREIGN KEY (user_id) REFERENCES user(id)

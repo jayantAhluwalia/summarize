@@ -3,7 +3,11 @@ package main
 import (
 	// "bytes"
 	"database/sql"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 type Db interface {
@@ -40,29 +44,39 @@ func (db *Sqlite) SaveUser(userName string) (id int64, err error) {
 	return userId, nil
 }
 
-func (db *Sqlite) SaveImage(userId int64, image []byte) (int64, error) {
-  // 1. Prepare the SQL statement with placeholders for user ID and image data
-  stmt, err := db.Prepare("INSERT INTO summary (user_id, image) VALUES (?, ?)")
-  if err != nil {
-    return 0, err
-  }
-  defer stmt.Close() // Close the prepared statement after use
+func (db *Sqlite) SaveImage(userId int64, image []byte) (id int64, err error) {
+	now := time.Now()
+	timestamp := now.Format("2006-01-02_15-04-05")
+	fileName := filepath.Join("uploads", fmt.Sprintf("%s_image.jpg", timestamp))
 
+	file, err := os.Create(fileName)
+	if err != nil {
+		return id, err
+	}
+	defer file.Close()
 
-  // 3. Execute the statement with user ID and image data
-  result, err := stmt.Exec(userId, image)
-  if err != nil {
-    return 0, err
-  }
+	_, err = file.Write(image)
+	if err != nil {
+		return id, err
+	}
 
-  // 4. Get the ID of the inserted image row (assuming auto-increment)
-  insertedID, err := result.LastInsertId()
-  if err != nil {
-    return 0, err
-  }
+	stmt, err := db.Prepare("INSERT INTO summary (user_id, image_path) VALUES (?, ?)")
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
 
-  // 5. Return the generated image ID
-  return insertedID, nil
+	result, err := stmt.Exec(userId, fileName)
+	if err != nil {
+		return 0, err
+	}
+
+	insertedID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return insertedID, nil
 }
 
 func (db *Sqlite) SaveText(userId int64, text string) error {
