@@ -16,6 +16,8 @@ type Db interface {
 	SaveText(userId int64, text string) error
 	SaveSummary(userId int64, summary string) error
 	GetUserId(username string) (id int64, found bool)
+	GetSummaryById(userId string) (imagePath string, ocrText string, summary string, err error)
+	GetAllIds(userId string) (ids []string, err error)
 }
 
 type Sqlite struct {
@@ -127,4 +129,82 @@ func (db *Sqlite) GetUserId(username string) (id int64, found bool) {
 	}
 
 	return userId, true
+}
+
+func (db *Sqlite) GetSummaryById(userId string) (imagePath string, ocrText string, summary string, err error) {
+	// Build the SQL query
+	query := `
+    SELECT image_path, ocr_parsed_text, summary
+    FROM summary
+    WHERE user_id = ?;
+  `
+
+	// Prepare the statement
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error preparing statement: %w", err)
+	}
+	defer stmt.Close() // Close the statement after use
+
+	// Execute the statement with the userId parameter
+	rows, err := stmt.Query(userId)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error querying database: %w", err)
+	}
+	defer rows.Close() // Close the rows after use
+
+	// Check if a row was found
+	if !rows.Next() {
+		return "", "", "", fmt.Errorf("no record found for user ID: %s", userId)
+	}
+
+	// Scan the retrieved data
+	err = rows.Scan(&imagePath, &ocrText, &summary)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error scanning data: %w", err)
+	}
+
+	return imagePath, ocrText, summary, nil
+}
+
+func (db *Sqlite) GetAllIds(userId string) (ids []string, err error) {
+	query := `
+	SELECT id
+	FROM summary
+	WHERE user_id = ?;
+`
+
+	// Prepare the statement
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing statement: %w", err)
+	}
+	defer stmt.Close() // Close the statement after use
+
+	// Execute the statement with the userId parameter
+	rows, err := stmt.Query(userId)
+	if err != nil {
+		return nil, fmt.Errorf("error querying database: %w", err)
+	}
+	defer rows.Close() // Close the rows after use
+
+	// Initialize an empty slice for IDs
+	ids = []string{}
+
+	// Scan each row and append the ID to the slice
+	for rows.Next() {
+		var id string
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning data: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	// Check for any errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return ids, nil
 }

@@ -2,15 +2,19 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"os"
+	"strconv"
 
 	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/sashabaranov/go-openai"
 )
 
 type OCRResponse struct {
@@ -57,6 +61,17 @@ type AdvertalystAi struct {
 	Db
 }
 
+func buildSummarizer() *GptSummarizer {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Fatal("Error loading .env file:", err)
+	}
+
+	openAiAuthToken := os.Getenv("OPENAI_API_KEY") 
+	openAiClient := openai.NewClient(openAiAuthToken)
+
+	return &GptSummarizer{openAiClient}
+}
+
 func main() {
 	db, err := sql.Open("sqlite3", "ocr.db")
 	if err != nil {
@@ -78,6 +93,9 @@ func main() {
 	createTables(db)
 
 	router.HandleFunc("/api/v1/page", ai.uploadImage).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/page/{id}", ai.getPageById).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/page/{id}/all", ai.getAllIds).Methods(http.MethodGet)
+
 
 	log.Println("Server listening on port 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
@@ -115,6 +133,11 @@ func getUserIdFromRequest(r *http.Request) string {
 }
 
 func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
+	response := struct{
+		Success bool `json:"success"`
+		UserId string `json:"user_id"`
+	}{}
+
 	image, _, err := r.FormFile("filetype")
 	if err != nil {
 		log.Println("Error getting image file:", err)
@@ -131,6 +154,7 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		userId, _ = ai.SaveUser(userName)
 	}
 
+	response.UserId = strconv.FormatInt(userId, 10)
 	imageBytes, _ := io.ReadAll(image)
 
 	log.Println("user id:", userId)
@@ -151,7 +175,7 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if summary, e := ai.Summarize(text, true); e == nil {
+		if summary, e := ai.Summarize(text); e == nil {
 			summaries[i] = summary
 			ai.SaveSummary(userId, summary)
 		} else {
@@ -168,5 +192,54 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "OCR Result: %s", texts)
+	response.Success = true
+	responseBytes, _ := json.Marshal(response)
+	_, _ = w.Write(responseBytes)
+}
+
+func (ai *AdvertalystAi) getPageById(w http.ResponseWriter, r *http.Request) {
+	response := struct{
+		ImageURL string `json:"imageURL"`
+		TextExtracted string `json:"textExtracted"`
+		TextSummary string `json:"textSummary"`
+	}{}	
+
+	idStr := mux.Vars(r)["id"]
+
+	imagePath, ocrText, summary, err := ai.GetSummaryById(idStr)
+	
+	if err != nil {
+		log.Println("Error in getting summary:", err)
+		http.Error(w, "Failed to get summary", http.StatusInternalServerError)
+		return
+	}
+
+	response.ImageURL = imagePath
+	response.TextExtracted = ocrText
+	response.TextSummary = summary
+
+	responseBytes, _ := json.Marshal(response)
+	_, _ = w.Write(responseBytes)
+}
+
+
+func (ai *AdvertalystAi) getAllIds(w http.ResponseWriter, r *http.Request) {
+	response := struct{
+		Ids []string `json:"ids"`
+	}{}	
+
+	idStr := mux.Vars(r)["id"]
+
+	allIds, err := ai.GetAllIds(idStr)
+
+	if err != nil {
+		log.Println("Error in getting all Ids:", err)
+		http.Error(w, "Failed to get all Ids", http.StatusInternalServerError)
+		return
+	}
+
+	response.Ids = allIds
+
+	responseBytes, _ := json.Marshal(response)
+	_, _ = w.Write(responseBytes)
 }

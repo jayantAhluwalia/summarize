@@ -4,28 +4,24 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-
-	"github.com/joho/godotenv"
-	// "github.com/sashabaranov/go-openai"
 	openai "github.com/sashabaranov/go-openai"
 )
 
 type Summarizer interface {
-	Summarize(string, bool) (string, error)
+	Summarize(string) (string, error)
 }
 
 type FaltuSummarizer struct{}
 
-func (*FaltuSummarizer) Summarize(text string, useGpt bool) (string, error) {
-	if useGpt {
-		return "this is a random summary, to avoid running out of source", nil
-	}
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatal("Error loading .env file:", err)
-	}
-	c := openai.NewClient(os.Getenv("OPENAI_API_KEY"))
+func (*FaltuSummarizer) Summarize(text string) (string, error) {
+	return text[:4], nil
+}
+
+type GptSummarizer struct{
+	openAiClient *openai.Client	
+}
+
+func (gpt *GptSummarizer) Summarize(text string) (string, error) {
 	ctx := context.Background()
 	content := fmt.Sprintf("Please summarize the provided text in less than 30 characters: %s", text)
 	
@@ -38,7 +34,7 @@ func (*FaltuSummarizer) Summarize(text string, useGpt bool) (string, error) {
 		Messages: dialogue,
 	}
 
-	resp, err := c.CreateChatCompletion(ctx, req)
+	resp, err := gpt.openAiClient.CreateChatCompletion(ctx, req)
 	if err != nil {
 		log.Println("Completion error: ", err)
 		return "", err
