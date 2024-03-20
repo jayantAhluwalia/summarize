@@ -1,1 +1,3 @@
-ocr.db
+.env
+./ocr.db
+uploads/

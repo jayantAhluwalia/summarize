@@ -151,9 +151,9 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if summary, e := ai.Summarize(text); e == nil {
+		if summary, e := ai.Summarize(text, true); e == nil {
 			summaries[i] = summary
-			// ai.SaveSummary(userId, imageId, summary)
+			ai.SaveSummary(userId, summary)
 		} else {
 			err = errors.Join(err, e)
 		}

@@ -14,7 +14,7 @@ type Db interface {
 	SaveImage(userId int64, image []byte) (id int64, err error)
 	SaveUser(userName string) (id int64, err error)
 	SaveText(userId int64, text string) error
-	SaveSummary(userId int64, imageId int64, summary string) error
+	SaveSummary(userId int64, summary string) error
 	GetUserId(username string) (id int64, found bool)
 }
 
@@ -94,7 +94,18 @@ func (db *Sqlite) SaveText(userId int64, text string) error {
 	return nil
 }
 
-func (db *Sqlite) SaveSummary(userId int64, imageId int64, summary string) error {
+func (db *Sqlite) SaveSummary(userId int64, summary string) error {
+	stmt, err := db.Prepare("UPDATE summary SET summary = ? WHERE user_id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(summary, userId)
+
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
