@@ -11,7 +11,7 @@ import (
 )
 
 type TextExtractor interface {
-	ExtractText(image io.Reader) ([]string, error)
+	ExtractText(image []byte) ([]string, error)
 }
 
 type OcrSpace struct {
@@ -19,7 +19,7 @@ type OcrSpace struct {
 	http.Client
 }
 
-func (space *OcrSpace) ExtractText(image io.Reader) (texts []string, err error) {
+func (space *OcrSpace) ExtractText(image []byte) (texts []string, err error) {
 	payload := new(bytes.Buffer)
 	writer := multipart.NewWriter(payload)
 
@@ -45,7 +45,7 @@ func (space *OcrSpace) ExtractText(image io.Reader) (texts []string, err error) 
 		return nil, err
 	}
 
-	if _, err := io.Copy(part, image); err != nil {
+	if _, err := io.Copy(part, bytes.NewReader(image)); err != nil {
 		return nil, err
 	}
 

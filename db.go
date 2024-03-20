@@ -3,12 +3,11 @@ package main
 import (
 	// "bytes"
 	"database/sql"
-	"io"
 	"log"
 )
 
 type Db interface {
-	SaveImage(userId int64, image io.Reader) (id int64, err error)
+	SaveImage(userId int64, image []byte) (id int64, err error)
 	SaveUser(userName string) (id int64, err error)
 	SaveText(userId int64, text string) error
 	SaveSummary(userId int64, imageId int64, summary string) error
@@ -41,7 +40,7 @@ func (db *Sqlite) SaveUser(userName string) (id int64, err error) {
 	return userId, nil
 }
 
-func (db *Sqlite) SaveImage(userId int64, image io.Reader) (int64, error) {
+func (db *Sqlite) SaveImage(userId int64, image []byte) (int64, error) {
   // 1. Prepare the SQL statement with placeholders for user ID and image data
   stmt, err := db.Prepare("INSERT INTO summary (user_id, image) VALUES (?, ?)")
   if err != nil {
@@ -50,10 +49,8 @@ func (db *Sqlite) SaveImage(userId int64, image io.Reader) (int64, error) {
   defer stmt.Close() // Close the prepared statement after use
 
 
-  // 2. Convert reader to byte slice (assuming image data is small)
-  imageData, _ := io.ReadAll(image)
   // 3. Execute the statement with user ID and image data
-  result, err := stmt.Exec(userId, imageData)
+  result, err := stmt.Exec(userId, image)
   if err != nil {
     return 0, err
   }
