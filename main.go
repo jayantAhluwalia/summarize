@@ -1,84 +1,149 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"fmt"
-	"io"
-	"mime/multipart"
 
 	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type OCRResponse struct {
-  OCRExitCode                int                 `json:"OCRExitCode"`
-  IsErroredOnProcessing     bool                   `json:"IsErroredOnProcessing"`
-  ErrorMessage              string                 `json:"ErrorMessage"`
-  ErrorDetails              string                 `json:"ErrorDetails"`
-  SearchablePDFURL          string                 `json:"SearchablePDFURL"`
-  ProcessingTimeInMilliseconds string                 `json:"ProcessingTimeInMilliseconds"`
-  ParsedResults             []ParsedResult         `json:"ParsedResults"`
+	OCRExitCode                  int            `json:"OCRExitCode"`
+	IsErroredOnProcessing        bool           `json:"IsErroredOnProcessing"`
+	ErrorMessage                 string         `json:"ErrorMessage"`
+	ErrorDetails                 string         `json:"ErrorDetails"`
+	SearchablePDFURL             string         `json:"SearchablePDFURL"`
+	ProcessingTimeInMilliseconds string         `json:"ProcessingTimeInMilliseconds"`
+	ParsedResults                []ParsedResult `json:"ParsedResults"`
 }
 
 type ParsedResult struct {
-  FileParseExitCode        int                 `json:"FileParseExitCode"`
-  ParsedText               string                 `json:"ParsedText"`
-  ErrorMessage              string                 `json:"ErrorMessage"`
-  ErrorDetails              string                 `json:"ErrorDetails"`
-  TextOverlay               *TextOverlay           `json:"TextOverlay,omitempty"`
+	FileParseExitCode int          `json:"FileParseExitCode"`
+	ParsedText        string       `json:"ParsedText"`
+	ErrorMessage      string       `json:"ErrorMessage"`
+	ErrorDetails      string       `json:"ErrorDetails"`
+	TextOverlay       *TextOverlay `json:"TextOverlay,omitempty"`
 }
 
 type TextOverlay struct {
-  HasOverlay               bool                   `json:"HasOverlay"`
-  Message                  string                 `json:"Message"`
-  Lines                    []Line                 `json:"Lines"`
+	HasOverlay bool   `json:"HasOverlay"`
+	Message    string `json:"Message"`
+	Lines      []Line `json:"Lines"`
 }
 
 type Line struct {
-  Words                     []Word                 `json:"Words"`
-  MaxHeight                 int                    `json:"MaxHeight"`
-  MinTop                   int                    `json:"MinTop"`
+	Words     []Word `json:"Words"`
+	MaxHeight int    `json:"MaxHeight"`
+	MinTop    int    `json:"MinTop"`
 }
 
 type Word struct {
-  WordText                 string                 `json:"WordText"`
-  Left                      int                    `json:"Left"`
-  Top                       int                    `json:"Top"`
-  Height                    int                    `json:"Height"`
-  Width                     int                    `json:"Width"`
+	WordText string `json:"WordText"`
+	Left     int    `json:"Left"`
+	Top      int    `json:"Top"`
+	Height   int    `json:"Height"`
+	Width    int    `json:"Width"`
+}
+
+type AdvertalystAi struct {
+	Summarizer
+	TextExtractor
+	Db
 }
 
 func main() {
+	ai := AdvertalystAi{
+		TextExtractor: &OcrSpace{
+			url:    "https://api.ocr.space/parse/image",
+			Client: http.Client{},
+		},
+		Summarizer: &FaltuSummarizer{},
+		Db: &Sqlite{},
+	}
+
 	router := mux.NewRouter()
 
-	router.HandleFunc("/api/v1/page", uploadImage).Methods("POST")
+	db, err := sql.Open("sqlite3", "ocr.db")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	log.Println("Server listening on port 8000") 
+	defer db.Close()
+	createTables(db)
+
+	router.HandleFunc("/api/v1/page", ai.uploadImage).Methods(http.MethodPost)
+
+	log.Println("Server listening on port 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
+func createTables(db *sql.DB) {
+	userTable := `
+		CREATE TABLE IF NOT EXISTS user (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL
+		)
+	`
+	summaryTable := `
+		CREATE TABLE IF NOT EXISTS summary (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			image BLOB NOT NULL,
+			ocr_parsed_text TEXT NOT NULL,
+			summary TEXT,
+			FOREIGN KEY (user_id) REFERENCES user(id)
+		)
+	`
 
-func uploadImage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		log.Println("Received non-POST request for /api/v1/page")
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
+	if _, err := db.Exec(userTable); err != nil {
+		log.Println(err)
 	}
 
-	file, _, err := r.FormFile("filetype")
+	if _, err := db.Exec(summaryTable); err != nil {
+		log.Println(err)
+	}
+}
+
+func getUserIdFromRequest(r *http.Request) string {
+	return ""
+}
+
+func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
+	image, _, err := r.FormFile("filetype")
 	if err != nil {
 		log.Println("Error getting image file:", err)
 		http.Error(w, "Failed to upload image", http.StatusBadRequest)
 		return
 	}
 
-	text, err := performOCR(file)
+	defer image.Close()
 
-	defer file.Close()
+	userId := getUserIdFromRequest(r)
+	imageId, _ := ai.SaveImage(userId, image)
+
+	log.Println(imageId)
+
+	texts, err := ai.ExtractText(image)
+	summaries := make([]string, len(texts))
+
+	for i, text := range texts {
+		ai.SaveText(userId, imageId, text)
+		if summary, e := ai.Summarize(text); e == nil {
+			summaries[i] = summary
+			ai.SaveSummary(userId, imageId, summary)
+		} else {
+			err = errors.Join(err, e)
+		}
+	}
+
+	log.Println("Summaries: ", summaries)
+	log.Println("errors:", err)
 
 	if err != nil {
 		log.Println("Error performing OCR:", err)
@@ -86,75 +151,5 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "OCR Result: %s", text)
-}
-
-
-func performOCR(file multipart.File) (string, error) {
-	url := "https://api.ocr.space/parse/image"
-	method := "POST"
-
-	writer := new(bytes.Buffer)
-	multipartWriter := multipart.NewWriter(writer)
-
-	if err := multipartWriter.WriteField("language", "eng"); err != nil {
-			return "", err
-	}
-
-	if err := multipartWriter.WriteField("isOverlayRequired", "false"); err != nil {
-		return "", err
-	}
-	if err := multipartWriter.WriteField("iscreatesearchablepdf", "false"); err != nil {
-		return "", err
-	}
-	if err := multipartWriter.WriteField("issearchablepdfhidetextlayer", "false"); err != nil {
-		return "", err
-	}
-
-	part, err := multipartWriter.CreateFormFile("filetype", "/pnp/image.png")
-	if err != nil {
-			return "", err
-	}
-	_, err = io.Copy(part, file)
-	if err != nil {
-			return "", err
-	}
-	_ = multipartWriter.Close()
-
-	contentType := multipartWriter.FormDataContentType()
-
-	req, err := http.NewRequest(method, url, writer)
-	if err != nil {
-			return "", err
-	}
-	req.Header.Set("apikey", "helloworld")
-	req.Header.Set("Content-Type", contentType)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-			return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-			return "", err
-	}
-
-	var response OCRResponse
-
-	err = json.Unmarshal(body, &response)
-
-	if err != nil {
-    return "", errors.New("Failed to parse OCR response")
-  }
-
-	if response.IsErroredOnProcessing == true {
-		return response.ErrorMessage, nil
-	}
-
-	results := response.ParsedResults
-
-	return string(results[0].ParsedText), nil
+	fmt.Fprintf(w, "OCR Result: %s", texts)
 }
