@@ -66,17 +66,37 @@ func buildSummarizer() *GptSummarizer {
 		log.Fatal("Error loading .env file:", err)
 	}
 
-	openAiAuthToken := os.Getenv("OPENAI_API_KEY") 
+	openAiAuthToken := os.Getenv("OPENAI_API_KEY")
 	openAiClient := openai.NewClient(openAiAuthToken)
 
 	return &GptSummarizer{openAiClient}
 }
 
-func main() {
-	db, err := sql.Open("sqlite3", "ocr.db")
+const imageDirPath string = "uploads"
+
+func setupDb() *sql.DB {
+	dbFile := "ocr.db"
+
+	// create db file if not exists
+	f, err := os.OpenFile(dbFile, os.O_CREATE, 0644)
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+
+	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	os.Mkdir("uploads", 0755)
+
+	return db
+}
+
+func main() {
+	db := setupDb()
+
 	defer db.Close()
 
 	ai := AdvertalystAi{
@@ -85,7 +105,7 @@ func main() {
 			Client: http.Client{},
 		},
 		Summarizer: &FaltuSummarizer{},
-		Db: &Sqlite{db},
+		Db:         &Sqlite{db, imageDirPath},
 	}
 
 	router := mux.NewRouter()
@@ -95,7 +115,6 @@ func main() {
 	router.HandleFunc("/api/v1/page", ai.uploadImage).Methods(http.MethodPost)
 	router.HandleFunc("/api/v1/page/{id}", ai.getPageById).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/page/{id}/all", ai.getAllIds).Methods(http.MethodGet)
-
 
 	log.Println("Server listening on port 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
@@ -133,9 +152,10 @@ func getUserIdFromRequest(r *http.Request) string {
 }
 
 func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
-	response := struct{
-		Success bool `json:"success"`
-		UserId string `json:"user_id"`
+	log.Println("hellhe")
+	response := struct {
+		Success bool   `json:"success"`
+		UserId  string `json:"user_id"`
 	}{}
 
 	image, _, err := r.FormFile("filetype")
@@ -148,7 +168,6 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 	defer image.Close()
 	userName := getUserIdFromRequest(r)
 
-	
 	userId, found := ai.GetUserId(userName)
 	if !found {
 		userId, _ = ai.SaveUser(userName)
@@ -198,16 +217,16 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ai *AdvertalystAi) getPageById(w http.ResponseWriter, r *http.Request) {
-	response := struct{
-		ImageURL string `json:"imageURL"`
+	response := struct {
+		ImageURL      string `json:"imageURL"`
 		TextExtracted string `json:"textExtracted"`
-		TextSummary string `json:"textSummary"`
-	}{}	
+		TextSummary   string `json:"textSummary"`
+	}{}
 
 	idStr := mux.Vars(r)["id"]
 
 	imagePath, ocrText, summary, err := ai.GetSummaryById(idStr)
-	
+
 	if err != nil {
 		log.Println("Error in getting summary:", err)
 		http.Error(w, "Failed to get summary", http.StatusInternalServerError)
@@ -222,11 +241,10 @@ func (ai *AdvertalystAi) getPageById(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(responseBytes)
 }
 
-
 func (ai *AdvertalystAi) getAllIds(w http.ResponseWriter, r *http.Request) {
-	response := struct{
+	response := struct {
 		Ids []string `json:"ids"`
-	}{}	
+	}{}
 
 	idStr := mux.Vars(r)["id"]
 

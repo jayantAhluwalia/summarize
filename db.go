@@ -22,6 +22,7 @@ type Db interface {
 
 type Sqlite struct {
 	*sql.DB
+	imageDirPath string
 }
 
 func (db *Sqlite) SaveUser(userName string) (id int64, err error) {
@@ -49,7 +50,7 @@ func (db *Sqlite) SaveUser(userName string) (id int64, err error) {
 func (db *Sqlite) SaveImage(userId int64, image []byte) (id int64, err error) {
 	now := time.Now()
 	timestamp := now.Format("2006-01-02_15-04-05")
-	fileName := filepath.Join("uploads", fmt.Sprintf("%s_image.jpg", timestamp))
+	fileName := filepath.Join(db.imageDirPath, fmt.Sprintf("%s_image.jpg", timestamp))
 
 	file, err := os.Create(fileName)
 	if err != nil {
