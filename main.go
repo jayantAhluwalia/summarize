@@ -72,11 +72,10 @@ func buildSummarizer() *GptSummarizer {
 	return &GptSummarizer{openAiClient}
 }
 
-const imageDirPath string = "uploads"
+const imageDirPath string = "db/uploads"
+const dbFile string = "db/ocr.db"
 
 func setupDb() *sql.DB {
-	dbFile := "ocr.db"
-
 	// create db file if not exists
 	f, err := os.OpenFile(dbFile, os.O_CREATE, 0644)
 	if err != nil {
@@ -89,7 +88,9 @@ func setupDb() *sql.DB {
 		log.Fatal(err)
 	}
 
-	os.Mkdir("uploads", 0755)
+	if err := os.MkdirAll(imageDirPath, 0755); err != nil {
+		panic(err)
+	}
 
 	return db
 }
