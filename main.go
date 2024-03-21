@@ -155,8 +155,8 @@ func getUserIdFromRequest(r *http.Request) string {
 func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 	log.Println("hellhe")
 	response := struct {
-		Success bool   `json:"success"`
-		UserId  string `json:"user_id"`
+		Success   bool   `json:"success"`
+		ImagePath string `json:"user_id"`
 	}{}
 
 	image, _, err := r.FormFile("filetype")
@@ -174,7 +174,6 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		userId, _ = ai.SaveUser(userName)
 	}
 
-	response.UserId = strconv.FormatInt(userId, 10)
 	imageBytes, _ := io.ReadAll(image)
 
 	log.Println("user id:", userId)
@@ -186,6 +185,7 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println(imageId)
 
+	response.ImagePath = strconv.FormatInt(userId, 10)
 	texts, err := ai.ExtractText(imageBytes)
 	summaries := make([]string, len(texts))
 
@@ -211,6 +211,13 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to perform OCR", http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*") // XXX: Shouldn't be *.
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	response.Success = true
 	responseBytes, _ := json.Marshal(response)
@@ -239,6 +246,7 @@ func (ai *AdvertalystAi) getPageById(w http.ResponseWriter, r *http.Request) {
 	response.TextSummary = summary
 
 	responseBytes, _ := json.Marshal(response)
+
 	_, _ = w.Write(responseBytes)
 }
 
