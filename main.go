@@ -235,6 +235,12 @@ func (ai *AdvertalystAi) getPageById(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get summary", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Access-Control-Allow-Origin", "*") // XXX: Shouldn't be *.
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	response.ImageURL = imagePath
 	response.TextExtracted = ocrText
@@ -259,6 +265,13 @@ func (ai *AdvertalystAi) getAllIds(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get all Ids", http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*") // XXX: Shouldn't be *.
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	response.Ids = allIds
 
