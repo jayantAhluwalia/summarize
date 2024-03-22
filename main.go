@@ -153,10 +153,9 @@ func getUserIdFromRequest(r *http.Request) string {
 }
 
 func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
-	log.Println("hellhe")
 	response := struct {
 		Success   bool   `json:"success"`
-		ImagePath string `json:"user_id"`
+		ImageId string `json:"image_id"`
 	}{}
 
 	image, _, err := r.FormFile("filetype")
@@ -176,16 +175,14 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 
 	imageBytes, _ := io.ReadAll(image)
 
-	log.Println("user id:", userId)
 
 	imageId, err := ai.SaveImage(userId, imageBytes)
 	if err != nil {
 		log.Println("error saving image: ", err)
 		return
 	}
-	log.Println(imageId)
 
-	response.ImagePath = strconv.FormatInt(userId, 10)
+	response.ImageId = strconv.FormatInt(imageId, 10)
 	texts, err := ai.ExtractText(imageBytes)
 	summaries := make([]string, len(texts))
 
@@ -203,8 +200,6 @@ func (ai *AdvertalystAi) uploadImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Println("Summaries: ", summaries)
-	log.Println("errors:", err)
 
 	if err != nil {
 		log.Println("Error performing OCR:", err)

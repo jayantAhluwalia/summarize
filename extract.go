@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 )
@@ -68,10 +67,6 @@ func (space *OcrSpace) ExtractText(image []byte) (texts []string, err error) {
 
 	var response OCRResponse
 
-	// if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-	// 	return texts, errors.New("failed to parse OCR response")
-	// }
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 			return nil, err
@@ -79,7 +74,6 @@ func (space *OcrSpace) ExtractText(image []byte) (texts []string, err error) {
 
 
 	if err := json.Unmarshal(body, &response); err != nil {
-		log.Println(string(body))
 		return nil, errors.New("failed to parse OCR response")
 	}
 

@@ -16,7 +16,7 @@ type Db interface {
 	SaveText(userId int64, text string) error
 	SaveSummary(userId int64, summary string) error
 	GetUserId(username string) (id int64, found bool)
-	GetSummaryById(userId string) (imagePath string, ocrText string, summary string, err error)
+	GetSummaryById(imageId string) (imagePath string, ocrText string, summary string, err error)
 	GetAllIds(userId string) (ids []string, err error)
 }
 
@@ -63,13 +63,16 @@ func (db *Sqlite) SaveImage(userId int64, image []byte) (id int64, err error) {
 		return id, err
 	}
 
+  imageURL := fmt.Sprintf("http://localhost:8000/%s", fileName)
+
+
 	stmt, err := db.Prepare("INSERT INTO summary (user_id, image_path) VALUES (?, ?)")
 	if err != nil {
 		return 0, err
 	}
 	defer stmt.Close()
 
-	result, err := stmt.Exec(userId, fileName)
+	result, err := stmt.Exec(userId, imageURL)
 	if err != nil {
 		return 0, err
 	}
@@ -132,12 +135,12 @@ func (db *Sqlite) GetUserId(username string) (id int64, found bool) {
 	return userId, true
 }
 
-func (db *Sqlite) GetSummaryById(userId string) (imagePath string, ocrText string, summary string, err error) {
+func (db *Sqlite) GetSummaryById(imageId string) (imagePath string, ocrText string, summary string, err error) {
 	// Build the SQL query
 	query := `
     SELECT image_path, ocr_parsed_text, summary
     FROM summary
-    WHERE user_id = ?;
+    WHERE id = ?;
   `
 
 	// Prepare the statement
@@ -148,7 +151,7 @@ func (db *Sqlite) GetSummaryById(userId string) (imagePath string, ocrText strin
 	defer stmt.Close() // Close the statement after use
 
 	// Execute the statement with the userId parameter
-	rows, err := stmt.Query(userId)
+	rows, err := stmt.Query(imageId)
 	if err != nil {
 		return "", "", "", fmt.Errorf("error querying database: %w", err)
 	}
@@ -156,7 +159,7 @@ func (db *Sqlite) GetSummaryById(userId string) (imagePath string, ocrText strin
 
 	// Check if a row was found
 	if !rows.Next() {
-		return "", "", "", fmt.Errorf("no record found for user ID: %s", userId)
+		return "", "", "", fmt.Errorf("no record found for user ID: %s", imageId)
 	}
 
 	// Scan the retrieved data

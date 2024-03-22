@@ -41,6 +41,5 @@ func (gpt *GptSummarizer) Summarize(text string) (string, error) {
 	}
 
 	summary := resp.Choices[0]
-	log.Println("sum mess: ", summary.Message)
 	return summary.Message.Content, nil
 }
