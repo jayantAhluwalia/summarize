@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 )
 
 type TextExtractor interface {
@@ -21,7 +22,7 @@ type OcrSpace struct {
 func (space *OcrSpace) ExtractText(image []byte) (texts []string, err error) {
 	payload := new(bytes.Buffer)
 	writer := multipart.NewWriter(payload)
-
+	ocrServiceKey := os.Getenv("OCR_SERVICE_API_KEY")
 	config := map[string]string{
 		"language":                     "eng",
 		"isOverlayRequired":            "false",
@@ -55,7 +56,7 @@ func (space *OcrSpace) ExtractText(image []byte) (texts []string, err error) {
 		return texts, err
 	}
 
-	req.Header.Set("apikey", "K85721292588957")
+	req.Header.Set("apikey", ocrServiceKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := space.Client.Do(req)
